@@ -1,6 +1,7 @@
 package pide.devuelve.entidades;
 import jakarta.persistence.*;
 import pide.devuelve.entidades.Prestamo;
+import java.util.List;
 
 
 @Entity
@@ -11,6 +12,21 @@ public class Prestamo {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
     
+    private String recurso;
+    private String usuario;
+    private String fechaInicio;
+    private String fechaDevolucion;
+    private String observaciones;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private EstadoPrestamo estado;
+    public enum EstadoPrestamo {
+        BUENO, 
+        REGULAR,
+        DEFECTUOSO
+    }
+
     @ManyToOne
     @JoinColumn(name = "usuario_id")
     private Usuario usuario;
@@ -46,4 +62,5 @@ public class Prestamo {
         this.recurso = recurso;
     }
     
+
 }
