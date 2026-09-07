@@ -6,14 +6,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import pide.devuelve.IService.IAtaqueService;
-import pide.devuelve.entidades.Ataque;
+import pide.devuelve.IService.IUsuarioService;
+import pide.devuelve.entidades.Usuario;
 
 @RestController
 @RequestMapping("/api/characters")
 public class UsuarioController {
     @Autowired
-    private IUsuariosService usuarioService;
+    private IUsuarioService usuarioService;
 
     @GetMapping
     public List<Usuario> getAllUsuarios() {
