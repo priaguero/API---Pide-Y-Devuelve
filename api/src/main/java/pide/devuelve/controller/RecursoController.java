@@ -6,8 +6,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import pide.devuelve.IService.IAtaqueService;
-import pide.devuelve.entidades.Ataque;
+import pide.devuelve.IService.IRecursoService;
+import pide.devuelve.entidades.Recurso;
 
 @RestController
 @RequestMapping("/api/recursos")
