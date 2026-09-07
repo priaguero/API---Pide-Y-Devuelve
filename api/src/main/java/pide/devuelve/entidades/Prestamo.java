@@ -46,4 +46,5 @@ public class Prestamo {
         this.recurso = recurso;
     }
     
+    
 }
