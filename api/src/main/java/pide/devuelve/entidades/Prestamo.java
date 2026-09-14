@@ -1,6 +1,7 @@
 package pide.devuelve.entidades;
 import jakarta.persistence.*;
 import pide.devuelve.entidades.Prestamo;
+import java.time.LocalDate;
 import java.util.List;
 
 
@@ -13,8 +14,8 @@ public class Prestamo {
     private int id;
     
 
-    private String fechaInicio;
-    private String fechaDevolucion;
+    private LocalDate fechaInicio;
+    private LocalDate fechaDevolucion;
     private String observaciones;
 
     @Enumerated(EnumType.STRING)
@@ -61,19 +62,19 @@ public class Prestamo {
         this.recurso = recurso;
     }
 
-    public String getFechaInicio() {
+    public LocalDate getFechaInicio() {
         return fechaInicio;
     }
 
-    public void setFechaInicio(String fechaInicio) {
+    public void setFechaInicio(LocalDate fechaInicio) {
         this.fechaInicio = fechaInicio;
     }
 
-    public String getFechaDevolucion() {
+    public LocalDate getFechaDevolucion() {
         return fechaDevolucion;
     }
 
-    public void setFechaDevolucion(String fechaDevolucion) {
+    public void setFechaDevolucion(LocalDate fechaDevolucion) {
         this.fechaDevolucion = fechaDevolucion;
     }
 
