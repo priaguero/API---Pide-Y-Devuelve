@@ -13,11 +13,20 @@ public class Recurso {
 
     private String nombre;
     private String codigo;
-    private String tipo;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private TipoRecurso tipo;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private EstadoRecurso estado;
+
+    public enum TipoRecurso {
+        COMPUTADORA,
+        CALCULADORA,
+        LIBRO
+    }
 
     public enum EstadoRecurso {
         DISPONIBLE,
@@ -47,11 +56,11 @@ public class Recurso {
         this.nombre = nombre;
     }
 
-    public String getTipo() {
+    public TipoRecurso getTipo() {
         return tipo;
     }
 
-    public void setTipo(String tipo) {
+    public void setTipo(TipoRecurso tipo) {
         this.tipo = tipo;
     }
 
