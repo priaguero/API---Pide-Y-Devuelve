@@ -1,10 +1,10 @@
-package pide.devuelve.service;
+package pide.devuelve.api.service;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import pide.devuelve.IService.IRecursoService;
-import pide.devuelve.entidades.Recurso;
-import pide.devuelve.repository.RecursoRepository;
+import pide.devuelve.api.IService.IRecursoService;
+import pide.devuelve.api.entidades.Recurso;
+import pide.devuelve.api.repository.RecursoRepository;
 
 @Service
 public class RecursoService implements IRecursoService {

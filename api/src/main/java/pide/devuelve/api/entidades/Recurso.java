@@ -1,6 +1,6 @@
-package pide.devuelve.entidades;
+package pide.devuelve.api.entidades;
 import jakarta.persistence.*;
-import pide.devuelve.entidades.Recurso;
+import pide.devuelve.api.entidades.Recurso;
 import java.util.List;
 
 @Entity

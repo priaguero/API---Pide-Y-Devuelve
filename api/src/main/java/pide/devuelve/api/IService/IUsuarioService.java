@@ -1,6 +1,6 @@
-package pide.devuelve.IService;
+package pide.devuelve.api.IService;
 import java.util.List;
-import pide.devuelve.entidades.Usuario;
+import pide.devuelve.api.entidades.Usuario;
 
 public interface IUsuarioService {
     List<Usuario> findAllUsuarios();
