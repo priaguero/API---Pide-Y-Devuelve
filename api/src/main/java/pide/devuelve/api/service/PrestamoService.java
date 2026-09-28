@@ -1,10 +1,10 @@
-package pide.devuelve.service;
+package pide.devuelve.api.service;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import pide.devuelve.IService.IPrestamoService;
-import pide.devuelve.entidades.Prestamo;
-import pide.devuelve.repository.PrestamoRepository;
+import pide.devuelve.api.IService.IPrestamoService;
+import pide.devuelve.api.entidades.Prestamo;
+import pide.devuelve.api.repository.PrestamoRepository;
 
 @Service
 public class PrestamoService implements IPrestamoService {

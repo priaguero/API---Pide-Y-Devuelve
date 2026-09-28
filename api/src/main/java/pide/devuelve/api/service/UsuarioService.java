@@ -1,10 +1,10 @@
-package pide.devuelve.service;
+package pide.devuelve.api.service;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import pide.devuelve.IService.IUsuarioService;
-import pide.devuelve.entidades.Usuario;
-import pide.devuelve.repository.UsuarioRepository;
+import pide.devuelve.api.IService.IUsuarioService;
+import pide.devuelve.api.entidades.Usuario;
+import pide.devuelve.api.repository.UsuarioRepository;
 
 @Service
 public class UsuarioService implements IUsuarioService {

@@ -1,6 +1,6 @@
-package pide.devuelve.entidades;
+package pide.devuelve.api.entidades;
 import jakarta.persistence.*;
-import pide.devuelve.entidades.Prestamo;
+import pide.devuelve.api.entidades.Prestamo;
 import java.time.LocalDate;
 import java.util.List;
 

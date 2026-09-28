@@ -1,6 +1,6 @@
-package pide.devuelve.IService;
+package pide.devuelve.api.IService;
 import java.util.List;
-import pide.devuelve.entidades.Prestamo;
+import pide.devuelve.api.entidades.Prestamo;
 
 public interface IPrestamoService {
     List<Prestamo> findAllPrestamos();

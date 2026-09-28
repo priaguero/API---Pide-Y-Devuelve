@@ -1,4 +1,4 @@
-package pide.devuelve.entidades;
+package pide.devuelve.api.entidades;
 import jakarta.persistence.*;
 import java.util.List;
 
