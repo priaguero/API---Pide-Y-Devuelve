@@ -1,8 +1,11 @@
 package pide.devuelve.controller;
+
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -15,14 +18,19 @@ public class PrestamoController {
     @Autowired
     private IPrestamoService prestamoService;
 
-    @GetMapping("/prestamos")
+    @GetMapping
     public List<Prestamo> getAllPrestamos() {
         return prestamoService.findAllPrestamos();
     }
 
-    @PostMapping("/prestamos")
+    @PostMapping
     public Prestamo createPrestamo(@RequestBody Prestamo prestamo) {
         return prestamoService.savePrestamo(prestamo);
     }
-    
+
+    @PutMapping("/{id}")
+    public Prestamo updatePrestamo(@PathVariable int id, @RequestBody Prestamo prestamo) {
+        prestamo.setId(id);
+        return prestamoService.savePrestamo(prestamo);
+    }
 }

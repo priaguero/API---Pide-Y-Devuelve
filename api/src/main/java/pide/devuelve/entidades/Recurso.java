@@ -1,6 +1,7 @@
 package pide.devuelve.entidades;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
-import pide.devuelve.entidades.Recurso;
 import java.util.List;
 
 @Entity
@@ -33,7 +34,7 @@ public class Recurso {
         NO_DISPONIBLE
     }
 
-
+    @JsonIgnore
     @OneToMany(mappedBy = "recurso")
     private List<Prestamo> prestamos;
 

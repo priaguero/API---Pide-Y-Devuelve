@@ -1,4 +1,5 @@
 package pide.devuelve.controller;
+
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -10,7 +11,7 @@ import pide.devuelve.IService.IUsuarioService;
 import pide.devuelve.entidades.Usuario;
 
 @RestController
-@RequestMapping("/api/characters")
+@RequestMapping("/api/usuarios")
 public class UsuarioController {
     @Autowired
     private IUsuarioService usuarioService;
@@ -24,6 +25,4 @@ public class UsuarioController {
     public Usuario createUsuario(@RequestBody Usuario usuario) {
         return usuarioService.saveUsuario(usuario);
     }
-    
-    
 }
