@@ -2,7 +2,9 @@ package pide.devuelve.api.controller;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,5 +26,10 @@ public class RecursoController {
     public Recurso createRecurso(@RequestBody Recurso recurso) {
         return recursoService.saveRecurso(recurso);
     }
-    
+
+    @PutMapping("/{id}")
+    public Recurso updateRecurso(@PathVariable int id, @RequestBody Recurso recurso) {
+        recurso.setId(id);
+        return recursoService.saveRecurso(recurso);
+    }
 }

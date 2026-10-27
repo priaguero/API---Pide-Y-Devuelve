@@ -13,7 +13,6 @@ import pide.devuelve.api.entidades.Usuario;
 
 @RestController
 @RequestMapping("/api/usuarios")
-@CrossOrigin(origins = "*")
 public class UsuarioController {
     @Autowired
     private IUsuarioService usuarioService;
@@ -27,5 +26,4 @@ public class UsuarioController {
     public Usuario createUsuario(@RequestBody Usuario usuario) {
         return usuarioService.saveUsuario(usuario);
     }
-
 }

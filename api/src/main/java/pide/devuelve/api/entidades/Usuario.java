@@ -1,4 +1,7 @@
 package pide.devuelve.api.entidades;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import java.util.List;
 
@@ -15,7 +18,10 @@ public class Usuario {
     private int DNI;
     private String curso;
     private String email;
+
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
+
     private boolean activo;
 
     @Enumerated(EnumType.STRING)
@@ -29,6 +35,7 @@ public class Usuario {
         DIRECTIVO
     }
 
+    @JsonIgnore
     @OneToMany(mappedBy = "usuario")
     private List<Prestamo> prestamos;
 
@@ -106,5 +113,5 @@ public class Usuario {
     public void setActivo(boolean activo) {
         this.activo = activo;
     }
-    
+
 }
