@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pide y Devuelve</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header>
+    <h1>📚 Pide y Devuelve</h1>
+    <p>Préstamo de materiales de la escuela</p>
+  </header>
+
+  <nav>
+    <button class="tab active" data-tab="prestar">Pedir préstamo</button>
+    <button class="tab" data-tab="prestamos">Préstamos</button>
+    <button class="tab" data-tab="recursos">Recursos</button>
+    <button class="tab" data-tab="usuarios">Usuarios</button>
+  </nav>
+
+  <main>
+    <!-- PEDIR PRÉSTAMO -->
+    <section id="prestar" class="panel active">
+      <h2>Nuevo préstamo</h2>
+      <div class="form">
+        <label>Persona
+          <select id="selUsuario"></select>
+        </label>
+        <label>Material (solo disponibles)
+          <select id="selRecurso"></select>
+        </label>
+        <label>Estado al retirar
+          <select id="selEstado">
+            <option value="BUENO">Bueno</option>
+            <option value="REGULAR">Regular</option>
+            <option value="DEFECTUOSO">Defectuoso</option>
+          </select>
+        </label>
+        <label>Observaciones
+          <input type="text" id="inpObs" maxlength="500" placeholder="Ej: Retira para clase de Programación">
+        </label>
+        <button id="btnPrestar" class="btn">Prestar</button>
+      </div>
+      <div id="resultado" class="resultado"></div>
+    </section>
+
+    <!-- PRÉSTAMOS -->
+    <section id="prestamos" class="panel">
+      <h2>Préstamos</h2>
+      <div class="filtros">
+        <button class="chip active" data-filtro="todos">Todos</button>
+        <button class="chip" data-filtro="activos">Pendientes de devolución</button>
+        <button class="chip" data-filtro="devueltos">Devueltos</button>
+      </div>
+      <div class="tabla-wrap">
+        <table>
+          <thead>
+            <tr><th>#</th><th>Persona</th><th>Material</th><th>Retiro</th><th>Devolución</th><th>Estado</th><th>Obs.</th><th></th></tr>
+          </thead>
+          <tbody id="tbPrestamos"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- RECURSOS -->
+    <section id="recursos" class="panel">
+      <h2>Recursos</h2>
+      <div class="filtros">
+        <select id="filtroTipo">
+          <option value="">Todos los tipos</option>
+          <option value="COMPUTADORA">Computadoras</option>
+          <option value="CALCULADORA">Calculadoras</option>
+          <option value="LIBRO">Libros</option>
+        </select>
+      </div>
+      <div id="gridRecursos" class="grid"></div>
+    </section>
+
+    <!-- USUARIOS -->
+    <section id="usuarios" class="panel">
+      <h2>Usuarios</h2>
+      <div class="tabla-wrap">
+        <table>
+          <thead>
+            <tr><th>#</th><th>Nombre</th><th>DNI</th><th>Curso</th><th>Email</th><th>Tipo</th><th>Activo</th></tr>
+          </thead>
+          <tbody id="tbUsuarios"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+  <script src="js/script.js"></script>
+</body>
+</html>
