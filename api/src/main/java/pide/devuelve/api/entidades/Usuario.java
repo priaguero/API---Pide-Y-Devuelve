@@ -27,12 +27,13 @@ public class Usuario {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TipoUsuario tipo;
-
+    
     public enum TipoUsuario {
         ALUMNO,
         DOCENTE,
         PRECEPTOR,
-        DIRECTIVO
+        DIRECTIVO,
+        ADMINISTRADOR
     }
 
     @JsonIgnore
@@ -66,10 +67,12 @@ public class Usuario {
         this.apellido = apellido;
     }
 
+    @JsonProperty("dni")
     public int getDNI() {
         return DNI;
     }
 
+    @JsonProperty("dni")
     public void setDNI(int dNI) {
         DNI = dNI;
     }
@@ -104,6 +107,10 @@ public class Usuario {
 
     public void setTipo(TipoUsuario tipo) {
         this.tipo = tipo;
+    }
+
+    public boolean esAdministrador() {
+        return tipo == TipoUsuario.ADMINISTRADOR;
     }
 
     public boolean isActivo() {

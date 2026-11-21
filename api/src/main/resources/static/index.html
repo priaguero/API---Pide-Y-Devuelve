@@ -3,95 +3,223 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pide y Devuelve</title>
+  <title>Pide y Devuelve – Préstamos de materiales de la escuela</title>
+  <link rel="icon" type="image/png" href="images/logo-recortado.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <header>
-    <h1>📚 Pide y Devuelve</h1>
-    <p>Préstamo de materiales de la escuela</p>
-  </header>
 
-  <nav>
-    <button class="tab active" data-tab="prestar">Pedir préstamo</button>
-    <button class="tab" data-tab="prestamos">Préstamos</button>
-    <button class="tab" data-tab="recursos">Recursos</button>
-    <button class="tab" data-tab="usuarios">Usuarios</button>
-  </nav>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <symbol id="icono-persona" viewBox="0 0 48 48">
+      <circle cx="24" cy="24" r="22" fill="#fff" stroke="#111" stroke-width="2.5"/>
+      <circle cx="24" cy="18" r="7.5" fill="#111"/>
+      <path d="M9 38c1.5-8 8-11.5 15-11.5S37.5 30 39 38c-4 4.2-9 6-15 6s-11-1.8-15-6z" fill="#111"/>
+    </symbol>
+    <symbol id="icono-lupa" viewBox="0 0 24 24">
+      <circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/>
+      <path d="M15 15l6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </symbol>
+  </svg>
 
-  <main>
-    <!-- PEDIR PRÉSTAMO -->
-    <section id="prestar" class="panel active">
-      <h2>Nuevo préstamo</h2>
-      <div class="form">
-        <label>Persona
-          <select id="selUsuario"></select>
+  <a class="saltar" href="#contenido">Saltar al contenido</a>
+
+  <div class="app">
+
+    <aside class="lateral">
+      <div class="buscador">
+        <svg class="icono" aria-hidden="true"><use href="#icono-lupa"/></svg>
+        <input type="search" id="buscador" placeholder="Buscar…" aria-label="Buscar en esta sección" autocomplete="off">
+      </div>
+
+      <nav class="menu" aria-label="Secciones">
+        <button type="button" class="item-menu" data-vista="mis-prestamos">Mis Préstamos</button>
+        <button type="button" class="item-menu activo" data-vista="recursos" aria-current="page">Recursos</button>
+        <!-- Solo se muestran si la persona es quien administra los préstamos (secretaría) -->
+        <button type="button" class="item-menu solo-admin" data-vista="prestamos" hidden>Préstamos</button>
+        <button type="button" class="item-menu solo-admin" data-vista="socios" hidden>Socios</button>
+      </nav>
+
+      <div class="zona-usuario" id="zonaUsuario"></div>
+    </aside>
+
+    <div class="contenido">
+      <header class="cabecera">
+        <img src="images/logo.png" alt="Pide y Devuelve – Préstamos de materiales de la escuela" class="logo">
+      </header>
+
+      <main id="contenido" tabindex="-1">
+
+        <section id="vista-mis-prestamos" class="vista" hidden>
+          <h1>Mis Préstamos</h1>
+          <div id="listaMisPrestamos"></div>
+        </section>
+
+        <section id="vista-recursos" class="vista">
+          <h1>Recursos</h1>
+          <div class="filtros" role="group" aria-label="Filtrar por tipo">
+            <button type="button" class="chip activo" data-tipo="todos">Todos</button>
+            <button type="button" class="chip" data-tipo="LIBRO">Libros</button>
+            <button type="button" class="chip" data-tipo="CALCULADORA">Calculadoras</button>
+            <button type="button" class="chip" data-tipo="COMPUTADORA">Computadoras</button>
+          </div>
+          <div id="gridRecursos" class="grid-recursos"></div>
+        </section>
+
+        <section id="vista-prestamos" class="vista" hidden>
+          <h1>Préstamos</h1>
+          <div class="filtros" role="group" aria-label="Filtrar préstamos">
+            <button type="button" class="chip activo" data-filtro="todos">Todos</button>
+            <button type="button" class="chip" data-filtro="pendientes">Pendientes de devolución</button>
+            <button type="button" class="chip" data-filtro="devueltos">Devueltos</button>
+          </div>
+          <div class="tabla-contenedor">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">Socio</th>
+                  <th scope="col">Recurso</th>
+                  <th scope="col">Retiro</th>
+                  <th scope="col">Devolución</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col">Observaciones</th>
+                  <th scope="col"><span class="solo-lectores">Acción</span></th>
+                </tr>
+              </thead>
+              <tbody id="cuerpoPrestamos"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="vista-socios" class="vista" hidden>
+          <h1>Socios</h1>
+          <div id="listaSocios" class="lista-socios"></div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <dialog id="dialogoSesion" aria-labelledby="tituloSesion">
+    <div class="dialogo-cabecera">
+      <h2 id="tituloSesion">Tu cuenta</h2>
+      <button type="button" class="cerrar" data-cerrar="dialogoSesion" aria-label="Cerrar">×</button>
+    </div>
+
+    <p class="aviso-dialogo" id="avisoSesion" hidden></p>
+
+    <div class="pestanas" role="tablist">
+      <button type="button" role="tab" class="pestana activo" data-pestana="ingresar" aria-selected="true">Iniciar sesión</button>
+      <button type="button" role="tab" class="pestana" data-pestana="registro" aria-selected="false">Registrarse</button>
+    </div>
+
+    <form id="formIngresar" class="formulario" novalidate>
+      <label>Email
+        <input type="email" id="ingresarEmail" autocomplete="email" required>
+      </label>
+      <label>Contraseña
+        <input type="password" id="ingresarClave" autocomplete="current-password" required>
+      </label>
+      <p class="error-form" id="errorIngresar" role="alert" hidden></p>
+      <button type="submit" class="btn">Iniciar sesión</button>
+    </form>
+
+    <form id="formRegistro" class="formulario" novalidate hidden>
+      <p class="ayuda">Completá tus datos reales: nombre y apellido completos, tal como figuran en la escuela. Así la secretaría puede identificarte al entregarte un préstamo.</p>
+
+      <div class="fila-doble">
+        <label>Nombre
+          <input type="text" id="registroNombre" autocomplete="given-name" required>
         </label>
-        <label>Material (solo disponibles)
-          <select id="selRecurso"></select>
+        <label>Apellido
+          <input type="text" id="registroApellido" autocomplete="family-name" required>
         </label>
-        <label>Estado al retirar
-          <select id="selEstado">
-            <option value="BUENO">Bueno</option>
-            <option value="REGULAR">Regular</option>
-            <option value="DEFECTUOSO">Defectuoso</option>
+      </div>
+
+      <div class="fila-doble">
+        <label>DNI
+          <input type="text" id="registroDni" inputmode="numeric" pattern="[0-9]*" maxlength="9" placeholder="Sin puntos" required>
+        </label>
+        <label>Rol en la escuela
+          <select id="registroRol" required>
+            <option value="ALUMNO">Estudiante</option>
+            <option value="DOCENTE">Docente</option>
+            <option value="PRECEPTOR">Preceptor/a</option>
+            <option value="DIRECTIVO">Directivo/a</option>
           </select>
         </label>
-        <label>Observaciones
-          <input type="text" id="inpObs" maxlength="500" placeholder="Ej: Retira para clase de Programación">
+      </div>
+
+      <label id="campoCurso">Curso
+        <input type="text" id="registroCurso" placeholder="Ej: 5° A" maxlength="20">
+      </label>
+
+      <label>Email
+        <input type="email" id="registroEmail" autocomplete="email" required>
+      </label>
+
+      <div class="fila-doble">
+        <label>Contraseña
+          <input type="password" id="registroClave" autocomplete="new-password" minlength="6" required>
         </label>
-        <button id="btnPrestar" class="btn">Prestar</button>
+        <label>Repetir contraseña
+          <input type="password" id="registroClave2" autocomplete="new-password" minlength="6" required>
+        </label>
       </div>
-      <div id="resultado" class="resultado"></div>
-    </section>
+      <p class="ayuda">La contraseña debe tener al menos 6 caracteres.</p>
 
-    <!-- PRÉSTAMOS -->
-    <section id="prestamos" class="panel">
-      <h2>Préstamos</h2>
-      <div class="filtros">
-        <button class="chip active" data-filtro="todos">Todos</button>
-        <button class="chip" data-filtro="activos">Pendientes de devolución</button>
-        <button class="chip" data-filtro="devueltos">Devueltos</button>
-      </div>
-      <div class="tabla-wrap">
-        <table>
-          <thead>
-            <tr><th>#</th><th>Persona</th><th>Material</th><th>Retiro</th><th>Devolución</th><th>Estado</th><th>Obs.</th><th></th></tr>
-          </thead>
-          <tbody id="tbPrestamos"></tbody>
-        </table>
-      </div>
-    </section>
+      <p class="error-form" id="errorRegistro" role="alert" hidden></p>
+      <button type="submit" class="btn">Crear cuenta</button>
+    </form>
+  </dialog>
 
-    <!-- RECURSOS -->
-    <section id="recursos" class="panel">
-      <h2>Recursos</h2>
-      <div class="filtros">
-        <select id="filtroTipo">
-          <option value="">Todos los tipos</option>
-          <option value="COMPUTADORA">Computadoras</option>
-          <option value="CALCULADORA">Calculadoras</option>
-          <option value="LIBRO">Libros</option>
+  <dialog id="dialogoPedido" aria-labelledby="tituloPedido">
+    <div class="dialogo-cabecera">
+      <h2 id="tituloPedido">Pedir préstamo</h2>
+      <button type="button" class="cerrar" data-cerrar="dialogoPedido" aria-label="Cerrar">×</button>
+    </div>
+    <form id="formPedido" class="formulario">
+      <div id="resumenPedido" class="resumen"></div>
+      <label>Observaciones (opcional)
+        <input type="text" id="pedidoObservaciones" maxlength="200" placeholder="Ej: Lo necesito para la clase de Matemática">
+      </label>
+      <p class="error-form" id="errorPedido" role="alert" hidden></p>
+      <div class="acciones">
+        <button type="button" class="btn secundario" data-cerrar="dialogoPedido">Cancelar</button>
+        <button type="submit" class="btn" id="btnConfirmarPedido">Confirmar pedido</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dialogoDevolucion" aria-labelledby="tituloDevolucion">
+    <div class="dialogo-cabecera">
+      <h2 id="tituloDevolucion">Registrar devolución</h2>
+      <button type="button" class="cerrar" data-cerrar="dialogoDevolucion" aria-label="Cerrar">×</button>
+    </div>
+    <form id="formDevolucion" class="formulario">
+      <div id="resumenDevolucion" class="resumen"></div>
+      <label>¿En qué estado vuelve?
+        <select id="devolucionEstado">
+          <option value="BUENO">Bueno</option>
+          <option value="REGULAR">Regular</option>
+          <option value="DEFECTUOSO">Defectuoso</option>
         </select>
+      </label>
+      <label>Observaciones (si tiene algún defecto, aclararlo acá)
+        <input type="text" id="devolucionObservaciones" maxlength="200">
+      </label>
+      <p class="error-form" id="errorDevolucion" role="alert" hidden></p>
+      <div class="acciones">
+        <button type="button" class="btn secundario" data-cerrar="dialogoDevolucion">Cancelar</button>
+        <button type="submit" class="btn">Registrar devolución</button>
       </div>
-      <div id="gridRecursos" class="grid"></div>
-    </section>
+    </form>
+  </dialog>
 
-    <!-- USUARIOS -->
-    <section id="usuarios" class="panel">
-      <h2>Usuarios</h2>
-      <div class="tabla-wrap">
-        <table>
-          <thead>
-            <tr><th>#</th><th>Nombre</th><th>DNI</th><th>Curso</th><th>Email</th><th>Tipo</th><th>Activo</th></tr>
-          </thead>
-          <tbody id="tbUsuarios"></tbody>
-        </table>
-      </div>
-    </section>
-  </main>
-
-  <div id="toast" class="toast"></div>
+  <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
   <script src="js/script.js"></script>
 </body>
 </html>
