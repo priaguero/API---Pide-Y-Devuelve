@@ -1,261 +1,981 @@
-const API = "/api";
-const URL_USUARIOS = API + "/usuarios";
-const URL_RECURSOS = API + "/recursos";
-const URL_PRESTAMOS = API + "/prestamos";
+const URL_BASE = "/api";
+const URL_USUARIOS = URL_BASE + "/usuarios";
+const URL_RECURSOS = URL_BASE + "/recursos";
+const URL_PRESTAMOS = URL_BASE + "/prestamos";
 
-const ICONOS = { COMPUTADORA: "💻", CALCULADORA: "🧮", LIBRO: "📖" };
+const ETIQUETAS_ROL = {
+  ALUMNO: "Estudiante",
+  DOCENTE: "Docente",
+  PRECEPTOR: "Preceptor/a",
+  DIRECTIVO: "Directivo/a",
+  ADMINISTRADOR: "Administrador"
+};
 
-let usuarios = [];
+const ETIQUETAS_ESTADO = {
+  BUENO: "Bueno",
+  REGULAR: "Regular",
+  DEFECTUOSO: "Defectuoso"
+};
+
+const ETIQUETAS_TIPO = {
+  LIBRO: "Libro",
+  CALCULADORA: "Calculadora",
+  COMPUTADORA: "Computadora"
+};
+
+let token = null;
+let usuarioActual = null;
+
 let recursos = [];
-let prestamos = [];
+let misPrestamos = [];
+let todosLosPrestamos = [];
+let socios = [];
+
+let vistaActual = "recursos";
+let filtroTipo = "todos";
 let filtroPrestamos = "todos";
+let textoBusqueda = "";
 
-// ====== HELPERS ======
-async function pedir(url, opciones = {}) {
-  const res = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    ...opciones,
-  });
-  if (!res.ok) {
-    const texto = await res.text();
-    throw new Error(texto || `Error ${res.status}`);
+let gruposVisibles = [];      // grupos de recursos que se están mostrando (para los botones "Pedir")
+let nombrePedidoPendiente = null; // recurso que quería pedir antes de iniciar sesión
+let grupoAPedir = null;
+let prestamoADevolver = null;
+let temporizadorAviso = null;
+
+// Funciones auxiliares
+function escapar(texto) {
+  if (texto === null || texto === undefined) {
+    return "";
   }
-  const txt = await res.text();
-  return txt ? JSON.parse(txt) : null;
+  const contenedor = document.createElement("div");
+  contenedor.textContent = String(texto);
+  return contenedor.innerHTML.replace(/"/g, "&quot;");
 }
 
-function esc(t) {
-  const d = document.createElement("div");
-  d.textContent = t ?? "";
-  return d.innerHTML;
+function normalizar(texto) {
+  if (texto === null || texto === undefined) {
+    return "";
+  }
+  return String(texto).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
-function toast(msg) {
-  const t = document.getElementById("toast");
-  t.textContent = msg;
-  t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 2800);
+function nombreCompleto(usuario) {
+  return usuario.nombre + " " + usuario.apellido;
 }
 
-function hoy() {
-  return new Date().toISOString().slice(0, 10);
+function formatearFecha(fecha) {
+  if (!fecha) {
+    return "-";
+  }
+  const partes = String(fecha).split("-");
+  if (partes.length !== 3) {
+    return fecha;
+  }
+  return partes[2] + "/" + partes[1] + "/" + partes[0];
 }
 
-// Soporta que el JSON venga como objeto anidado (usuario:{id}) o como id plano (usuarioId)
-function idDe(p, campo) {
-  return p[campo]?.id ?? p[campo + "Id"] ?? p[campo + "_id"];
+function esAdministrador() {
+  if (usuarioActual === null) {
+    return false;
+  }
+  if (usuarioActual.tipo === "ADMINISTRADOR") {
+    return true;
+  }
+  return false;
 }
 
-function nombreUsuario(id) {
-  const u = usuarios.find((x) => x.id === id);
-  return u ? `${u.nombre} ${u.apellido}` : `#${id}`;
+function etiquetaRol(usuario) {
+  let texto = ETIQUETAS_ROL[usuario.tipo];
+  if (!texto) {
+    texto = usuario.tipo;
+  }
+  return '<span class="etiqueta rol-' + escapar(usuario.tipo) + '">' + escapar(texto) + "</span>";
 }
 
-function nombreRecurso(id) {
-  const r = recursos.find((x) => x.id === id);
-  return r ? r.nombre : `#${id}`;
+function textoEstado(estado) {
+  const texto = ETIQUETAS_ESTADO[estado];
+  if (!texto) {
+    return estado;
+  }
+  return texto;
 }
 
-// Si tu backend espera otra forma, cambiás SOLO esta función
-function armarPrestamo({ usuarioId, recursoId, estado, observaciones }) {
-  return {
-    fechaInicio: hoy(),
-    fechaDevolucion: null,
-    observaciones,
-    estado,
-    usuario: { id: usuarioId },
-    recurso: { id: recursoId },
-  };
+function insigniaEstado(estado) {
+  return '<span class="insignia ' + escapar(estado) + '">' + escapar(textoEstado(estado)) + "</span>";
 }
 
-// ====== CARGA DE DATOS ======
-async function cargarTodo() {
+function puntajeCondicion(condicion) {
+  if (condicion === "BUENO") {
+    return 0;
+  }
+  if (condicion === "REGULAR") {
+    return 1;
+  }
+  return 2;
+}
+
+function mostrarAviso(mensaje) {
+  const aviso = document.getElementById("aviso");
+  aviso.textContent = mensaje;
+  aviso.classList.add("visible");
+  if (temporizadorAviso !== null) {
+    clearTimeout(temporizadorAviso);
+  }
+  temporizadorAviso = setTimeout(function () {
+    aviso.classList.remove("visible");
+  }, 3200);
+}
+
+function mostrarError(idElemento, mensaje) {
+  const elemento = document.getElementById(idElemento);
+  elemento.textContent = mensaje;
+  elemento.hidden = false;
+}
+
+function ocultarError(idElemento) {
+  document.getElementById(idElemento).hidden = true;
+}
+
+function abrirDialogo(idDialogo) {
+  document.getElementById(idDialogo).showModal();
+}
+
+function cerrarDialogo(idDialogo) {
+  document.getElementById(idDialogo).close();
+}
+
+// ====== COMUNICACIÓN CON LA API ======
+async function pedirApi(url, opciones) {
+  let metodo = "GET";
+  let cuerpo = undefined;
+  if (opciones) {
+    if (opciones.metodo) {
+      metodo = opciones.metodo;
+    }
+    if (opciones.cuerpo) {
+      cuerpo = JSON.stringify(opciones.cuerpo);
+    }
+  }
+
+  const cabeceras = { "Content-Type": "application/json" };
+  if (token !== null) {
+    cabeceras["Authorization"] = "Bearer " + token;
+  }
+
+  const respuesta = await fetch(url, { method: metodo, headers: cabeceras, body: cuerpo });
+  const texto = await respuesta.text();
+
+  if (!respuesta.ok) {
+    let mensaje = "Ocurrió un error (" + respuesta.status + ")";
+    try {
+      const datos = JSON.parse(texto);
+      if (datos.message) {
+        mensaje = datos.message;
+      }
+    } catch (error) {
+      // la respuesta no era JSON, dejamos el mensaje por defecto
+    }
+    // Si la sesión venció, limpiamos todo para que vuelva a iniciar sesión
+    if (respuesta.status === 401 && token !== null) {
+      limpiarSesion();
+      actualizarInterfaz();
+    }
+    throw new Error(mensaje);
+  }
+
+  if (texto === "") {
+    return null;
+  }
+  return JSON.parse(texto);
+}
+
+// sesión
+function guardarSesion(nuevoToken, usuario) {
+  token = nuevoToken;
+  usuarioActual = usuario;
+  localStorage.setItem("token", nuevoToken);
+}
+
+function limpiarSesion() {
+  token = null;
+  usuarioActual = null;
+  misPrestamos = [];
+  todosLosPrestamos = [];
+  socios = [];
+  localStorage.removeItem("token");
+}
+
+async function recuperarSesion() {
+  const tokenGuardado = localStorage.getItem("token");
+  if (tokenGuardado === null) {
+    return;
+  }
+  token = tokenGuardado;
   try {
-    [usuarios, recursos, prestamos] = await Promise.all([
-      pedir(URL_USUARIOS),
-      pedir(URL_RECURSOS),
-      pedir(URL_PRESTAMOS),
-    ]);
-    renderSelects();
-    renderPrestamos();
-    renderRecursos();
-    renderUsuarios();
-  } catch (e) {
-    toast("No se pudo conectar con la API");
-    console.error(e);
+    usuarioActual = await pedirApi(URL_USUARIOS + "/me");
+  } catch (error) {
+    limpiarSesion();
   }
 }
 
-// ====== RENDER ======
-function renderSelects() {
-  const selU = document.getElementById("selUsuario");
-  const selR = document.getElementById("selRecurso");
-
-  selU.innerHTML = usuarios
-    .filter((u) => u.activo !== false)
-    .map((u) => `<option value="${u.id}">${esc(u.nombre)} ${esc(u.apellido)} (${esc(u.tipo)})</option>`)
-    .join("");
-
-  const libres = recursos.filter((r) => r.estado === "DISPONIBLE");
-  selR.innerHTML = libres.length
-    ? libres.map((r) => `<option value="${r.id}">${esc(r.nombre)} [${esc(r.codigo)}]</option>`).join("")
-    : `<option value="">No hay materiales disponibles</option>`;
-
-  document.getElementById("btnPrestar").disabled = !libres.length;
+async function cerrarSesion() {
+  try {
+    await pedirApi(URL_USUARIOS + "/logout", { metodo: "POST" });
+  } catch (error) {
+    // si falla igual cerramos la sesión en este navegador
+  }
+  limpiarSesion();
+  actualizarInterfaz();
+  mostrarVista("recursos");
+  mostrarAviso("Cerraste la sesión");
 }
 
-function renderPrestamos() {
-  const tb = document.getElementById("tbPrestamos");
-  let lista = [...prestamos].sort((a, b) => b.id - a.id);
+function renderZonaUsuario() {
+  const zona = document.getElementById("zonaUsuario");
 
-  if (filtroPrestamos === "activos") lista = lista.filter((p) => !p.fechaDevolucion);
-  if (filtroPrestamos === "devueltos") lista = lista.filter((p) => p.fechaDevolucion);
-
-  if (!lista.length) {
-    tb.innerHTML = `<tr><td colspan="8">No hay préstamos para mostrar</td></tr>`;
+  if (usuarioActual === null) {
+    zona.innerHTML =
+      '<p class="invitacion">Iniciá sesión o registrate para pedir préstamos.</p>' +
+      '<button type="button" class="btn" data-accion="abrir-ingresar">Iniciar sesión</button>' +
+      '<button type="button" class="btn secundario" data-accion="abrir-registro">Registrarse</button>';
     return;
   }
 
-  tb.innerHTML = lista
-    .map((p) => {
-      const pendiente = !p.fechaDevolucion;
-      return `
-      <tr>
-        <td>${p.id}</td>
-        <td>${esc(nombreUsuario(idDe(p, "usuario")))}</td>
-        <td>${esc(nombreRecurso(idDe(p, "recurso")))}</td>
-        <td>${esc(p.fechaInicio)}</td>
-        <td>${pendiente ? '<span class="badge pendiente">Pendiente</span>' : esc(p.fechaDevolucion)}</td>
-        <td><span class="badge ${esc(p.estado)}">${esc(p.estado)}</span></td>
-        <td>${esc(p.observaciones)}</td>
-        <td>${pendiente ? `<button class="btn-sm" onclick="devolver(${p.id})">Devolver</button>` : ""}</td>
-      </tr>`;
+  let lineaCurso = "";
+  if (usuarioActual.tipo === "ALUMNO" && usuarioActual.curso) {
+    lineaCurso = '<div class="usuario-curso">Curso: ' + escapar(usuarioActual.curso) + "</div>";
+  }
+
+  zona.innerHTML =
+    '<div class="usuario-datos">' +
+    '<svg class="avatar" aria-hidden="true"><use href="#icono-persona"/></svg>' +
+    '<div class="usuario-texto">' +
+    '<div class="usuario-nombre" title="' + escapar(nombreCompleto(usuarioActual)) + '">' + escapar(nombreCompleto(usuarioActual)) + "</div>" +
+    etiquetaRol(usuarioActual) +
+    lineaCurso +
+    "</div></div>" +
+    '<button type="button" class="btn secundario" data-accion="cerrar-sesion">Cerrar sesión</button>';
+}
+
+function actualizarInterfaz() {
+  renderZonaUsuario();
+
+  // Los botones "Préstamos" y "Socios" solo los ve quien administra los préstamos
+  const botonesAdmin = document.querySelectorAll(".solo-admin");
+  for (let i = 0; i < botonesAdmin.length; i++) {
+    if (esAdministrador()) {
+      botonesAdmin[i].hidden = false;
+    } else {
+      botonesAdmin[i].hidden = true;
+    }
+  }
+
+  // Si estaba en una sección que ya no puede ver, vuelve a Recursos
+  if ((vistaActual === "socios" || vistaActual === "prestamos") && !esAdministrador()) {
+    mostrarVista("recursos");
+  }
+}
+
+function mostrarVista(nombre) {
+  if ((nombre === "socios" || nombre === "prestamos") && !esAdministrador()) {
+    nombre = "recursos";
+  }
+  vistaActual = nombre;
+
+  const botones = document.querySelectorAll(".item-menu");
+  for (let i = 0; i < botones.length; i++) {
+    if (botones[i].dataset.vista === nombre) {
+      botones[i].classList.add("activo");
+      botones[i].setAttribute("aria-current", "page");
+    } else {
+      botones[i].classList.remove("activo");
+      botones[i].removeAttribute("aria-current");
+    }
+  }
+
+  const vistas = document.querySelectorAll(".vista");
+  for (let i = 0; i < vistas.length; i++) {
+    if (vistas[i].id === "vista-" + nombre) {
+      vistas[i].hidden = false;
+    } else {
+      vistas[i].hidden = true;
+    }
+  }
+
+  if (nombre === "recursos") {
+    cargarRecursos();
+  } else if (nombre === "mis-prestamos") {
+    cargarMisPrestamos();
+  } else if (nombre === "prestamos") {
+    cargarTodosLosPrestamos();
+  } else if (nombre === "socios") {
+    cargarSocios();
+  }
+}
+
+function renderVistaActual() {
+  if (vistaActual === "recursos") {
+    renderRecursos();
+  } else if (vistaActual === "mis-prestamos") {
+    renderMisPrestamos();
+  } else if (vistaActual === "prestamos") {
+    renderPrestamosAdmin();
+  } else if (vistaActual === "socios") {
+    renderSocios();
+  }
+}
+
+// Carga los recursos desde la API y los muestra en la interfaz. Si hay un error, se muestra un aviso.
+async function cargarRecursos() {
+  try {
+    recursos = await pedirApi(URL_RECURSOS);
+  } catch (error) {
+    mostrarAviso("No se pudo conectar con la API");
+  }
+  renderRecursos();
+}
+
+async function cargarMisPrestamos() {
+  if (usuarioActual === null) {
+    renderMisPrestamos();
+    return;
+  }
+  try {
+    misPrestamos = await pedirApi(URL_PRESTAMOS + "/mios");
+  } catch (error) {
+    mostrarAviso(error.message);
+  }
+  renderMisPrestamos();
+}
+
+async function cargarTodosLosPrestamos() {
+  if (!esAdministrador()) {
+    return;
+  }
+  try {
+    todosLosPrestamos = await pedirApi(URL_PRESTAMOS);
+  } catch (error) {
+    mostrarAviso(error.message);
+  }
+  renderPrestamosAdmin();
+}
+
+async function cargarSocios() {
+  if (!esAdministrador()) {
+    return;
+  }
+  try {
+    socios = await pedirApi(URL_USUARIOS);
+  } catch (error) {
+    mostrarAviso(error.message);
+  }
+  renderSocios();
+}
+
+function agruparRecursos() {
+  // Se agrupan las unidades iguales (ej: las 30 copias de un libro) en una sola tarjeta
+  const grupos = new Map();
+
+  for (let i = 0; i < recursos.length; i++) {
+    const recurso = recursos[i];
+    let grupo = grupos.get(recurso.nombre);
+
+    if (grupo === undefined) {
+      grupo = {
+        nombre: recurso.nombre,
+        descripcion: recurso.descripcion,
+        imagen: recurso.imagen,
+        tipo: recurso.tipo,
+        total: 0,
+        disponibles: 0,
+        unidad: null
+      };
+      grupos.set(recurso.nombre, grupo);
+    }
+
+    grupo.total = grupo.total + 1;
+
+    if (recurso.estado === "DISPONIBLE") {
+      grupo.disponibles = grupo.disponibles + 1;
+      // Se ofrece primero la unidad en mejor estado
+      if (grupo.unidad === null) {
+        grupo.unidad = recurso;
+      } else if (puntajeCondicion(recurso.condicion) < puntajeCondicion(grupo.unidad.condicion)) {
+        grupo.unidad = recurso;
+      }
+    }
+  }
+
+  return Array.from(grupos.values());
+}
+
+function renderRecursos() {
+  const contenedor = document.getElementById("gridRecursos");
+  const todos = agruparRecursos();
+  const busqueda = normalizar(textoBusqueda);
+
+  gruposVisibles = [];
+  for (let i = 0; i < todos.length; i++) {
+    const grupo = todos[i];
+
+    if (filtroTipo !== "todos" && grupo.tipo !== filtroTipo) {
+      continue;
+    }
+    if (busqueda !== "") {
+      const textoGrupo = normalizar(grupo.nombre + " " + grupo.descripcion + " " + ETIQUETAS_TIPO[grupo.tipo]);
+      if (!textoGrupo.includes(busqueda)) {
+        continue;
+      }
+    }
+    gruposVisibles.push(grupo);
+  }
+
+  if (gruposVisibles.length === 0) {
+    contenedor.innerHTML = '<div class="vacio"><p>No hay recursos que coincidan con la búsqueda.</p></div>';
+    return;
+  }
+
+  contenedor.innerHTML = gruposVisibles
+    .map(function (grupo, indice) {
+      let estadoUnidad = "-";
+      let observacionUnidad = "-";
+      let codigoUnidad = "-";
+      let claseDisponibilidad = "no";
+      let textoDisponibilidad = "No disponible";
+      let botonPedir = '<button type="button" class="btn" disabled>Sin unidades disponibles</button>';
+
+      if (grupo.unidad !== null) {
+        estadoUnidad = textoEstado(grupo.unidad.condicion);
+        observacionUnidad = grupo.unidad.observaciones;
+        codigoUnidad = grupo.unidad.codigo;
+        claseDisponibilidad = "si";
+        textoDisponibilidad = "Disponible · " + grupo.disponibles + " de " + grupo.total;
+        botonPedir = '<button type="button" class="btn" data-pedir="' + indice + '">Pedir préstamo</button>';
+      }
+
+      return (
+        '<article class="tarjeta-recurso">' +
+        '<div class="imagen-recurso"><img src="' + escapar(grupo.imagen) + '" alt="' + escapar(grupo.nombre) + '" loading="lazy"></div>' +
+        '<div class="datos-recurso">' +
+        "<h3>" + escapar(grupo.nombre) + "</h3>" +
+        '<p class="descripcion">' + escapar(grupo.descripcion) + "</p>" +
+        '<ul class="detalle">' +
+        "<li><span>Estado: <strong>" + escapar(estadoUnidad) + "</strong></span></li>" +
+        "<li><span>Observaciones: " + escapar(observacionUnidad) + "</span></li>" +
+        "<li><span>Próxima unidad: " + escapar(codigoUnidad) + "</span></li>" +
+        "</ul>" +
+        '<span class="disponibilidad ' + claseDisponibilidad + '">' + escapar(textoDisponibilidad) + "</span>" +
+        botonPedir +
+        "</div></article>"
+      );
     })
     .join("");
 }
 
-function renderRecursos() {
-  const tipo = document.getElementById("filtroTipo").value;
-  const lista = recursos.filter((r) => !tipo || r.tipo === tipo);
-  document.getElementById("gridRecursos").innerHTML = lista.length
-    ? lista
-        .map(
-          (r) => `
-      <div class="card">
-        <div class="icono">${ICONOS[r.tipo] || "📦"}</div>
-        <strong>${esc(r.nombre)}</strong>
-        <small>Código: ${esc(r.codigo)} · ${esc(r.tipo)}</small>
-        <span class="badge ${esc(r.estado)}">${r.estado === "DISPONIBLE" ? "Disponible" : "Prestado"}</span>
-      </div>`
-        )
-        .join("")
-    : "<p>No hay recursos de ese tipo.</p>";
-}
+function renderMisPrestamos() {
+  const contenedor = document.getElementById("listaMisPrestamos");
 
-function renderUsuarios() {
-  document.getElementById("tbUsuarios").innerHTML = usuarios
-    .map(
-      (u) => `
-    <tr>
-      <td>${u.id}</td>
-      <td>${esc(u.nombre)} ${esc(u.apellido)}</td>
-      <td>${esc(u.dni ?? u.DNI)}</td>
-      <td>${esc(u.curso) || "-"}</td>
-      <td>${esc(u.email)}</td>
-      <td>${esc(u.tipo)}</td>
-      <td>${u.activo ? "Sí" : "No"}</td>
-    </tr>`
-    )
+  if (usuarioActual === null) {
+    contenedor.innerHTML =
+      '<div class="vacio"><p>Para ver tus préstamos tenés que iniciar sesión o registrarte.</p>' +
+      '<button type="button" class="btn" data-accion="abrir-ingresar">Iniciar sesión</button>' +
+      '<button type="button" class="btn secundario" data-accion="abrir-registro">Registrarme</button></div>';
+    return;
+  }
+
+  const busqueda = normalizar(textoBusqueda);
+  const lista = [];
+  for (let i = 0; i < misPrestamos.length; i++) {
+    const prestamo = misPrestamos[i];
+    if (busqueda !== "") {
+      const textoPrestamo = normalizar(prestamo.recurso.nombre + " " + prestamo.recurso.codigo + " " + prestamo.observaciones);
+      if (!textoPrestamo.includes(busqueda)) {
+        continue;
+      }
+    }
+    lista.push(prestamo);
+  }
+
+  if (lista.length === 0) {
+    contenedor.innerHTML =
+      '<div class="vacio"><p>Todavía no tenés préstamos para mostrar.</p>' +
+      '<button type="button" class="btn" data-accion="ir-recursos">Ver recursos</button></div>';
+    return;
+  }
+
+  contenedor.innerHTML = lista
+    .map(function (prestamo) {
+      let etiquetaSituacion = '<span class="insignia pendiente">Pendiente de devolución</span>';
+      if (prestamo.fechaDevolucion) {
+        etiquetaSituacion = '<span class="insignia devuelto">Devuelto</span>';
+      }
+
+      return (
+        '<article class="prestamo">' +
+        '<div class="prestamo-imagen"><img src="' + escapar(prestamo.recurso.imagen) + '" alt="' + escapar(prestamo.recurso.nombre) + '"></div>' +
+        '<div class="prestamo-datos">' +
+        "<h2>" + escapar(prestamo.recurso.nombre) + "<small>" + escapar(prestamo.recurso.codigo) + "</small></h2>" +
+        '<dl class="campos">' +
+        "<dt>Estado:</dt><dd>" + insigniaEstado(prestamo.estado) + "</dd>" +
+        "<dt>Observaciones:</dt><dd>" + escapar(prestamo.observaciones) + "</dd>" +
+        "<dt>Retiro:</dt><dd>" + escapar(formatearFecha(prestamo.fechaInicio)) + "</dd>" +
+        "<dt>Devolución:</dt><dd>" + escapar(formatearFecha(prestamo.fechaDevolucion)) + "</dd>" +
+        "<dt>Situación:</dt><dd>" + etiquetaSituacion + "</dd>" +
+        "</dl></div></article>"
+      );
+    })
     .join("");
 }
 
-// ====== ACCIONES ======
-async function prestar() {
-  const usuarioId = Number(document.getElementById("selUsuario").value);
-  const recursoId = Number(document.getElementById("selRecurso").value);
-  const estado = document.getElementById("selEstado").value;
-  const observaciones = document.getElementById("inpObs").value.trim();
-  const out = document.getElementById("resultado");
+function renderPrestamosAdmin() {
+  const cuerpo = document.getElementById("cuerpoPrestamos");
+  const busqueda = normalizar(textoBusqueda);
 
-  if (!usuarioId || !recursoId) {
-    out.innerHTML = `<div class="error">Elegí una persona y un material.</div>`;
+  // Los más nuevos primero
+  const ordenados = todosLosPrestamos.slice().sort(function (a, b) {
+    return b.id - a.id;
+  });
+
+  const lista = [];
+  for (let i = 0; i < ordenados.length; i++) {
+    const prestamo = ordenados[i];
+
+    if (filtroPrestamos === "pendientes" && prestamo.fechaDevolucion) {
+      continue;
+    }
+    if (filtroPrestamos === "devueltos" && !prestamo.fechaDevolucion) {
+      continue;
+    }
+    if (busqueda !== "") {
+      const textoPrestamo = normalizar(
+        nombreCompleto(prestamo.usuario) + " " + prestamo.usuario.curso + " " + prestamo.recurso.nombre + " " + prestamo.recurso.codigo
+      );
+      if (!textoPrestamo.includes(busqueda)) {
+        continue;
+      }
+    }
+    lista.push(prestamo);
+  }
+
+  if (lista.length === 0) {
+    cuerpo.innerHTML = '<tr><td colspan="8">No hay préstamos para mostrar.</td></tr>';
     return;
   }
 
-  try {
-    await pedir(URL_PRESTAMOS, {
-      method: "POST",
-      body: JSON.stringify(armarPrestamo({ usuarioId, recursoId, estado, observaciones })),
-    });
+  cuerpo.innerHTML = lista
+    .map(function (prestamo) {
+      let celdaDevolucion = escapar(formatearFecha(prestamo.fechaDevolucion));
+      let celdaAccion = "";
+      if (!prestamo.fechaDevolucion) {
+        celdaDevolucion = '<span class="insignia pendiente">Pendiente</span>';
+        celdaAccion = '<button type="button" class="btn chico" data-devolver="' + prestamo.id + '">Registrar devolución</button>';
+      }
 
-    // Marcamos el recurso como no disponible
-    const recurso = recursos.find((r) => r.id === recursoId);
-    await pedir(`${URL_RECURSOS}/${recursoId}`, {
-      method: "PUT",
-      body: JSON.stringify({ ...recurso, estado: "NO_DISPONIBLE" }),
-    });
+      let detalleSocio = ETIQUETAS_ROL[prestamo.usuario.tipo];
+      if (prestamo.usuario.tipo === "ALUMNO" && prestamo.usuario.curso) {
+        detalleSocio = detalleSocio + " · " + prestamo.usuario.curso;
+      }
 
-    out.innerHTML = `<div class="ok">✅ <strong>${esc(nombreUsuario(usuarioId))}</strong> retiró <strong>${esc(nombreRecurso(recursoId))}</strong>.</div>`;
-    document.getElementById("inpObs").value = "";
-    await cargarTodo();
-  } catch (e) {
-    out.innerHTML = `<div class="error">❌ No se pudo registrar: ${esc(e.message)}</div>`;
+      return (
+        "<tr>" +
+        "<td>" + prestamo.id + "</td>" +
+        '<td class="celda-persona">' + escapar(nombreCompleto(prestamo.usuario)) + "<small>" + escapar(detalleSocio) + "</small></td>" +
+        '<td class="celda-persona">' + escapar(prestamo.recurso.nombre) + "<small>" + escapar(prestamo.recurso.codigo) + "</small></td>" +
+        "<td>" + escapar(formatearFecha(prestamo.fechaInicio)) + "</td>" +
+        "<td>" + celdaDevolucion + "</td>" +
+        "<td>" + insigniaEstado(prestamo.estado) + "</td>" +
+        "<td>" + escapar(prestamo.observaciones) + "</td>" +
+        "<td>" + celdaAccion + "</td>" +
+        "</tr>"
+      );
+    })
+    .join("");
+}
+
+function renderSocios() {
+  const contenedor = document.getElementById("listaSocios");
+  const busqueda = normalizar(textoBusqueda);
+
+  const lista = [];
+  for (let i = 0; i < socios.length; i++) {
+    const socio = socios[i];
+    if (busqueda !== "") {
+      const textoSocio = normalizar(
+        nombreCompleto(socio) + " " + socio.email + " " + socio.curso + " " + ETIQUETAS_ROL[socio.tipo] + " " + socio.dni
+      );
+      if (!textoSocio.includes(busqueda)) {
+        continue;
+      }
+    }
+    lista.push(socio);
+  }
+
+  if (lista.length === 0) {
+    contenedor.innerHTML = '<div class="vacio"><p>No hay socios para mostrar.</p></div>';
+    return;
+  }
+
+  contenedor.innerHTML = lista
+    .map(function (socio) {
+      let detalle = escapar(socio.email) + " · DNI " + escapar(socio.dni);
+      if (socio.tipo === "ALUMNO" && socio.curso) {
+        detalle = detalle + " · Curso " + escapar(socio.curso);
+      }
+      return (
+        '<article class="socio">' +
+        '<svg class="avatar" aria-hidden="true"><use href="#icono-persona"/></svg>' +
+        '<div class="socio-datos">' +
+        '<div class="socio-nombre">' + escapar(nombreCompleto(socio)) + "</div>" +
+        '<div class="socio-detalle">' + detalle + "</div>" +
+        "</div>" +
+        etiquetaRol(socio) +
+        "</article>"
+      );
+    })
+    .join("");
+}
+
+function cambiarPestana(nombre) {
+  const pestanas = document.querySelectorAll(".pestana");
+  for (let i = 0; i < pestanas.length; i++) {
+    if (pestanas[i].dataset.pestana === nombre) {
+      pestanas[i].classList.add("activo");
+      pestanas[i].setAttribute("aria-selected", "true");
+    } else {
+      pestanas[i].classList.remove("activo");
+      pestanas[i].setAttribute("aria-selected", "false");
+    }
+  }
+
+  if (nombre === "ingresar") {
+    document.getElementById("formIngresar").hidden = false;
+    document.getElementById("formRegistro").hidden = true;
+  } else {
+    document.getElementById("formIngresar").hidden = true;
+    document.getElementById("formRegistro").hidden = false;
   }
 }
 
-async function devolver(id) {
-  const p = prestamos.find((x) => x.id === id);
-  if (!p) return;
+function abrirDialogoSesion(pestana, aviso) {
+  cambiarPestana(pestana);
+  ocultarError("errorIngresar");
+  ocultarError("errorRegistro");
 
-  const estado = prompt("¿En qué estado vuelve? (BUENO / REGULAR / DEFECTUOSO)", p.estado);
-  if (!estado) return;
-  const estadoOk = estado.toUpperCase().trim();
-  if (!["BUENO", "REGULAR", "DEFECTUOSO"].includes(estadoOk)) {
-    toast("Estado inválido");
+  const cajaAviso = document.getElementById("avisoSesion");
+  if (aviso) {
+    cajaAviso.textContent = aviso;
+    cajaAviso.hidden = false;
+  } else {
+    cajaAviso.hidden = true;
+  }
+  abrirDialogo("dialogoSesion");
+}
+
+function actualizarCampoCurso() {
+  // El curso solo se pide a los estudiantes
+  const campo = document.getElementById("campoCurso");
+  const entrada = document.getElementById("registroCurso");
+  if (document.getElementById("registroRol").value === "ALUMNO") {
+    campo.hidden = false;
+    entrada.required = true;
+  } else {
+    campo.hidden = true;
+    entrada.required = false;
+    entrada.value = "";
+  }
+}
+
+async function despuesDeIniciarSesion(respuesta) {
+  guardarSesion(respuesta.token, respuesta.usuario);
+  cerrarDialogo("dialogoSesion");
+  actualizarInterfaz();
+  mostrarAviso("¡Hola, " + respuesta.usuario.nombre + "!");
+
+  // Si había elegido un recurso antes de iniciar sesión, seguimos con ese pedido
+  if (nombrePedidoPendiente !== null) {
+    const nombre = nombrePedidoPendiente;
+    nombrePedidoPendiente = null;
+    await cargarRecursos();
+    let grupoEncontrado = null;
+    for (let i = 0; i < gruposVisibles.length; i++) {
+      if (gruposVisibles[i].nombre === nombre) {
+        grupoEncontrado = gruposVisibles[i];
+      }
+    }
+    if (grupoEncontrado !== null && grupoEncontrado.unidad !== null) {
+      abrirDialogoPedido(grupoEncontrado);
+    }
+    return;
+  }
+
+  renderVistaActual();
+}
+
+async function enviarIngreso(evento) {
+  evento.preventDefault();
+  ocultarError("errorIngresar");
+
+  const email = document.getElementById("ingresarEmail").value.trim();
+  const clave = document.getElementById("ingresarClave").value;
+
+  if (email === "" || clave === "") {
+    mostrarError("errorIngresar", "Completá el email y la contraseña.");
     return;
   }
 
   try {
-    await pedir(`${URL_PRESTAMOS}/${id}`, {
-      method: "PUT",
-      body: JSON.stringify({ ...p, fechaDevolucion: hoy(), estado: estadoOk }),
+    const respuesta = await pedirApi(URL_USUARIOS + "/login", {
+      metodo: "POST",
+      cuerpo: { email: email, password: clave }
     });
+    document.getElementById("formIngresar").reset();
+    await despuesDeIniciarSesion(respuesta);
+  } catch (error) {
+    mostrarError("errorIngresar", error.message);
+  }
+}
 
-    const recurso = recursos.find((r) => r.id === idDe(p, "recurso"));
-    if (recurso) {
-      await pedir(`${URL_RECURSOS}/${recurso.id}`, {
-        method: "PUT",
-        body: JSON.stringify({ ...recurso, estado: "DISPONIBLE" }),
-      });
+async function enviarRegistro(evento) {
+  evento.preventDefault();
+  ocultarError("errorRegistro");
+
+  const nombre = document.getElementById("registroNombre").value.trim();
+  const apellido = document.getElementById("registroApellido").value.trim();
+  const dni = document.getElementById("registroDni").value.trim();
+  const rol = document.getElementById("registroRol").value;
+  const curso = document.getElementById("registroCurso").value.trim();
+  const email = document.getElementById("registroEmail").value.trim();
+  const clave = document.getElementById("registroClave").value;
+  const clave2 = document.getElementById("registroClave2").value;
+
+  if (nombre === "" || apellido === "") {
+    mostrarError("errorRegistro", "Ingresá tu nombre y apellido completos.");
+    return;
+  }
+  if (!/^[0-9]{6,9}$/.test(dni)) {
+    mostrarError("errorRegistro", "El DNI debe tener entre 6 y 9 números, sin puntos.");
+    return;
+  }
+  if (rol === "ALUMNO" && curso === "") {
+    mostrarError("errorRegistro", "Los estudiantes tienen que indicar su curso.");
+    return;
+  }
+  if (email === "" || !email.includes("@")) {
+    mostrarError("errorRegistro", "Ingresá un email válido.");
+    return;
+  }
+  if (clave.length < 6) {
+    mostrarError("errorRegistro", "La contraseña debe tener al menos 6 caracteres.");
+    return;
+  }
+  if (clave !== clave2) {
+    mostrarError("errorRegistro", "Las contraseñas no coinciden.");
+    return;
+  }
+
+  try {
+    const respuesta = await pedirApi(URL_USUARIOS + "/registro", {
+      metodo: "POST",
+      cuerpo: {
+        nombre: nombre,
+        apellido: apellido,
+        dni: Number(dni),
+        tipo: rol,
+        curso: curso,
+        email: email,
+        password: clave
+      }
+    });
+    document.getElementById("formRegistro").reset();
+    actualizarCampoCurso();
+    await despuesDeIniciarSesion(respuesta);
+  } catch (error) {
+    mostrarError("errorRegistro", error.message);
+  }
+}
+
+function pedirRecurso(indice) {
+  const grupo = gruposVisibles[indice];
+  if (grupo === undefined || grupo.unidad === null) {
+    return;
+  }
+
+  // Para pedir un préstamo hay que tener la sesión iniciada
+  if (usuarioActual === null) {
+    nombrePedidoPendiente = grupo.nombre;
+    abrirDialogoSesion("ingresar", "Iniciá sesión o registrate para pedir un préstamo.");
+    return;
+  }
+  abrirDialogoPedido(grupo);
+}
+
+function abrirDialogoPedido(grupo) {
+  grupoAPedir = grupo;
+  ocultarError("errorPedido");
+  document.getElementById("pedidoObservaciones").value = "";
+  document.getElementById("resumenPedido").innerHTML =
+    "<strong>" + escapar(grupo.nombre) + "</strong><br>" +
+    "Unidad: " + escapar(grupo.unidad.codigo) + "<br>" +
+    "Estado: " + escapar(textoEstado(grupo.unidad.condicion)) + "<br>" +
+    "Observaciones: " + escapar(grupo.unidad.observaciones) + "<br>" +
+    "A nombre de: <strong>" + escapar(nombreCompleto(usuarioActual)) + "</strong>";
+  abrirDialogo("dialogoPedido");
+}
+
+async function enviarPedido(evento) {
+  evento.preventDefault();
+  ocultarError("errorPedido");
+  if (grupoAPedir === null || usuarioActual === null) {
+    return;
+  }
+
+  const boton = document.getElementById("btnConfirmarPedido");
+  boton.disabled = true;
+
+  try {
+    await pedirApi(URL_PRESTAMOS + "/solicitar", {
+      metodo: "POST",
+      cuerpo: {
+        recursoId: grupoAPedir.unidad.id,
+        observaciones: document.getElementById("pedidoObservaciones").value.trim()
+      }
+    });
+    const nombre = grupoAPedir.nombre;
+    grupoAPedir = null;
+    cerrarDialogo("dialogoPedido");
+    mostrarAviso("Pediste: " + nombre);
+    mostrarVista("mis-prestamos");
+  } catch (error) {
+    mostrarError("errorPedido", error.message);
+    await cargarRecursos();
+  }
+
+  boton.disabled = false;
+}
+
+function abrirDialogoDevolucion(idPrestamo) {
+  let encontrado = null;
+  for (let i = 0; i < todosLosPrestamos.length; i++) {
+    if (todosLosPrestamos[i].id === idPrestamo) {
+      encontrado = todosLosPrestamos[i];
+    }
+  }
+  if (encontrado === null) {
+    return;
+  }
+
+  prestamoADevolver = encontrado;
+  ocultarError("errorDevolucion");
+  document.getElementById("devolucionEstado").value = encontrado.estado;
+  document.getElementById("devolucionObservaciones").value = "";
+  document.getElementById("resumenDevolucion").innerHTML =
+    "<strong>" + escapar(encontrado.recurso.nombre) + "</strong> (" + escapar(encontrado.recurso.codigo) + ")<br>" +
+    "Lo tiene: <strong>" + escapar(nombreCompleto(encontrado.usuario)) + "</strong><br>" +
+    "Retirado el " + escapar(formatearFecha(encontrado.fechaInicio));
+  abrirDialogo("dialogoDevolucion");
+}
+
+async function enviarDevolucion(evento) {
+  evento.preventDefault();
+  ocultarError("errorDevolucion");
+  if (prestamoADevolver === null) {
+    return;
+  }
+
+  try {
+    await pedirApi(URL_PRESTAMOS + "/" + prestamoADevolver.id + "/devolver", {
+      metodo: "POST",
+      cuerpo: {
+        estado: document.getElementById("devolucionEstado").value,
+        observaciones: document.getElementById("devolucionObservaciones").value.trim()
+      }
+    });
+    prestamoADevolver = null;
+    cerrarDialogo("dialogoDevolucion");
+    mostrarAviso("Devolución registrada");
+    await cargarTodosLosPrestamos();
+  } catch (error) {
+    mostrarError("errorDevolucion", error.message);
+  }
+}
+
+function activarChips(chips, atributo, alElegir) {
+  for (let i = 0; i < chips.length; i++) {
+    chips[i].addEventListener("click", function () {
+      for (let j = 0; j < chips.length; j++) {
+        chips[j].classList.remove("activo");
+      }
+      chips[i].classList.add("activo");
+      alElegir(chips[i].dataset[atributo]);
+    });
+  }
+}
+
+function prepararEventos() {
+  // Menú lateral
+  const botonesMenu = document.querySelectorAll(".item-menu");
+  for (let i = 0; i < botonesMenu.length; i++) {
+    botonesMenu[i].addEventListener("click", function () {
+      mostrarVista(botonesMenu[i].dataset.vista);
+    });
+  }
+
+  // Buscador
+  document.getElementById("buscador").addEventListener("input", function (evento) {
+    textoBusqueda = evento.target.value;
+    renderVistaActual();
+  });
+
+  // Filtros
+  activarChips(document.querySelectorAll("[data-tipo]"), "tipo", function (valor) {
+    filtroTipo = valor;
+    renderRecursos();
+  });
+  activarChips(document.querySelectorAll("[data-filtro]"), "filtro", function (valor) {
+    filtroPrestamos = valor;
+    renderPrestamosAdmin();
+  });
+
+  // Botones de toda la página
+  document.addEventListener("click", function (evento) {
+    const boton = evento.target.closest("button");
+    if (boton === null) {
+      return;
     }
 
-    toast("Devolución registrada ✅");
-    await cargarTodo();
-  } catch (e) {
-    toast("Error: " + e.message);
-  }
+    if (boton.dataset.pedir !== undefined) {
+      pedirRecurso(Number(boton.dataset.pedir));
+    } else if (boton.dataset.devolver !== undefined) {
+      abrirDialogoDevolucion(Number(boton.dataset.devolver));
+    } else if (boton.dataset.cerrar !== undefined) {
+      cerrarDialogo(boton.dataset.cerrar);
+    } else if (boton.dataset.pestana !== undefined) {
+      cambiarPestana(boton.dataset.pestana);
+    } else if (boton.dataset.accion === "abrir-ingresar") {
+      abrirDialogoSesion("ingresar", "");
+    } else if (boton.dataset.accion === "abrir-registro") {
+      abrirDialogoSesion("registro", "");
+    } else if (boton.dataset.accion === "cerrar-sesion") {
+      cerrarSesion();
+    } else if (boton.dataset.accion === "ir-recursos") {
+      mostrarVista("recursos");
+    }
+  });
+
+  // Formularios
+  document.getElementById("formIngresar").addEventListener("submit", enviarIngreso);
+  document.getElementById("formRegistro").addEventListener("submit", enviarRegistro);
+  document.getElementById("formPedido").addEventListener("submit", enviarPedido);
+  document.getElementById("formDevolucion").addEventListener("submit", enviarDevolucion);
+  document.getElementById("registroRol").addEventListener("change", actualizarCampoCurso);
 }
 
-// ====== EVENTOS ======
-document.querySelectorAll(".tab").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((b) => b.classList.remove("active"));
-    document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
-    btn.classList.add("active");
-    document.getElementById(btn.dataset.tab).classList.add("active");
-  });
-});
+async function iniciar() {
+  prepararEventos();
+  actualizarCampoCurso();
+  await recuperarSesion();
+  actualizarInterfaz();
+  mostrarVista("recursos");
+}
 
-document.querySelectorAll(".chip").forEach((chip) => {
-  chip.addEventListener("click", () => {
-    document.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
-    chip.classList.add("active");
-    filtroPrestamos = chip.dataset.filtro;
-    renderPrestamos();
-  });
-});
-
-document.getElementById("btnPrestar").addEventListener("click", prestar);
-document.getElementById("filtroTipo").addEventListener("change", renderRecursos);
-
-cargarTodo();
+iniciar();

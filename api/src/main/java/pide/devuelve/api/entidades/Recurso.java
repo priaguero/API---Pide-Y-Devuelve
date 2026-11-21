@@ -14,6 +14,12 @@ public class Recurso {
 
     private String nombre;
     private String codigo;
+    private String descripcion;
+    private String imagen;
+    private String observaciones;
+
+    @Enumerated(EnumType.STRING)
+    private Prestamo.EstadoPrestamo condicion = Prestamo.EstadoPrestamo.BUENO;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -79,6 +85,41 @@ public class Recurso {
 
     public void setEstado(EstadoRecurso estado) {
         this.estado = estado;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public void setDescripcion(String descripcion) {
+        this.descripcion = descripcion;
+    }
+
+    public String getImagen() {
+        return imagen;
+    }
+
+    public void setImagen(String imagen) {
+        this.imagen = imagen;
+    }
+
+    public String getObservaciones() {
+        return observaciones;
+    }
+
+    public void setObservaciones(String observaciones) {
+        this.observaciones = observaciones;
+    }
+
+    public Prestamo.EstadoPrestamo getCondicion() {
+        if (condicion == null) {
+            return Prestamo.EstadoPrestamo.BUENO;
+        }
+        return condicion;
+    }
+
+    public void setCondicion(Prestamo.EstadoPrestamo condicion) {
+        this.condicion = condicion;
     }
 
 }

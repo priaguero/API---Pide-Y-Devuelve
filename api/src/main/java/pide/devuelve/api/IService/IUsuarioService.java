@@ -5,4 +5,6 @@ import pide.devuelve.api.entidades.Usuario;
 public interface IUsuarioService {
     List<Usuario> findAllUsuarios();
     Usuario saveUsuario(Usuario usuario);
+    Usuario registrarUsuario(Usuario usuario);
+    Usuario autenticar(String email, String password);
 }
